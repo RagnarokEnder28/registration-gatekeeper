@@ -25,35 +25,21 @@ else:
     # We convert both to strings to avoid errors if the sheet treats tokens as numbers
     token_row = df[(df['Token'].astype(str) == str(user_token)) & (df['Status'] == 'Active')]
 
-    if not token_row.empty:
-        # SUCCESS: Update the status to 'Used' in the dataframe
+   if not token_row.empty:
+        # 1. Update the status to 'Used' in the dataframe
         df.loc[df['Token'].astype(str) == str(user_token), 'Status'] = 'Used'
         
-        # Save the updated sheet back to Google
+        # 2. Save the updated sheet back to Google
         conn.update(data=df)
         
-        st.success("Identity Verified! Your one-time link is ready.")
+        st.success("Identity Verified! Please complete the form below.")
+
+        # 3. EMBED THE FORM (Instead of the old button)
+        # Use ?embed=true to make the MS Form fit nicely in the window
+        form_url = "https://forms.office.com/r/KchEak7FWA?embed=true"
         
-        # The actual Microsoft Form link
-        form_url = "https://forms.office.com/r/KchEak7FWA"
+        st.components.v1.iframe(form_url, height=800, scrolling=True)
         
-        # Corrected Markdown block
-        st.markdown(f"""
-            <a href="{form_url}" target="_blank">
-                <button style="
-                    background-color: #0078d4; 
-                    color: white; 
-                    padding: 15px 32px; 
-                    border: none; 
-                    border-radius: 4px; 
-                    cursor: pointer; 
-                    font-size: 18px;">
-                    Open Registration Form
-                </button>
-            </a>
-        """, unsafe_allow_html=True)
-        
-        st.info("Note: This access link has now expired and cannot be used again.")
+        st.info("Note: This access link has now expired. Do not refresh this page until you have submitted the form.")
     else:
         st.error("Invalid or Expired Link.")
-        st.write("This secure link has already been used or does not exist. Please request a new link.")
