@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
+# Basic Page Setup
 st.set_page_config(page_title="Secure Access Portal", page_icon="🔐")
 
 st.title("Service Registration Access")
@@ -22,24 +23,26 @@ else:
     df = conn.read(ttl=0)
 
     # 3. Check if token exists and is still 'Active'
-    # We convert both to strings to avoid errors if the sheet treats tokens as numbers
+    # We use .astype(str) to ensure a perfect match regardless of data type
     token_row = df[(df['Token'].astype(str) == str(user_token)) & (df['Status'] == 'Active')]
 
-   if not token_row.empty:
-        # 1. Update the status to 'Used' in the dataframe
+    if not token_row.empty:
+        # SUCCESS: Update the status to 'Used' immediately (the "Burn")
         df.loc[df['Token'].astype(str) == str(user_token), 'Status'] = 'Used'
         
-        # 2. Save the updated sheet back to Google
+        # Save the updated sheet back to Google
         conn.update(data=df)
         
-        st.success("Identity Verified! Please complete the form below.")
+        st.success("Identity Verified! Please complete the registration below.")
 
-        # 3. EMBED THE FORM (Instead of the old button)
-        # Use ?embed=true to make the MS Form fit nicely in the window
+        # 4. EMBED THE FORM (This hides the direct URL from the address bar)
+        # The ?embed=true makes the Microsoft Form fit the Streamlit window
         form_url = "https://forms.office.com/r/KchEak7FWA?embed=true"
         
         st.components.v1.iframe(form_url, height=800, scrolling=True)
         
-        st.info("Note: This access link has now expired. Do not refresh this page until you have submitted the form.")
+        st.info("⚠️ IMPORTANT: Do not refresh or close this page until you have clicked 'Submit' on the form above.")
     else:
+        # This handles tokens that are already 'Used' or don't exist
         st.error("Invalid or Expired Link.")
+        st.write("This secure link has already been used. If you need to register again, please request a new link.")
