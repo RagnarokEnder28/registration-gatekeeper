@@ -2,47 +2,53 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# Basic Page Setup
-st.set_page_config(page_title="Secure Access Portal", page_icon="🔐")
+# 1. SET TO WIDE MODE: This uses the full width of the browser window
+st.set_page_config(
+    page_title="Secure Access Portal", 
+    page_icon="🔐", 
+    layout="wide" # This is key for "full screen"
+)
 
-st.title("Service Registration Access")
-st.write("Verifying your secure access token...")
+# 2. CSS HACK: This removes the default padding at the top of Streamlit apps
+st.markdown("""
+    <style>
+        .block-container {
+            padding-top: 1rem;
+            padding-bottom: 0rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+    </style>
+""", unsafe_allow_html=True)
 
-# 1. Connect to Google Sheets
-# Connection details are pulled from your Streamlit Cloud Secrets
+# 3. Connection and Logic
 conn = st.connection("gsheets", type=GSheetsConnection)
-
-# 2. Get the token from the URL (?token=xxxx)
 user_token = st.query_params.get("token")
 
 if not user_token:
     st.error("No access token detected. Please use the link provided by your coordinator.")
 else:
-    # Read the current sheet data
-    # ttl=0 ensures we don't use a cached version of the spreadsheet
     df = conn.read(ttl=0)
-
-    # 3. Check if token exists and is still 'Active'
-    # We use .astype(str) to ensure a perfect match regardless of data type
     token_row = df[(df['Token'].astype(str) == str(user_token)) & (df['Status'] == 'Active')]
 
     if not token_row.empty:
-        # SUCCESS: Update the status to 'Used' immediately (the "Burn")
+        # Update status immediately
         df.loc[df['Token'].astype(str) == str(user_token), 'Status'] = 'Used'
-        
-        # Save the updated sheet back to Google
         conn.update(data=df)
         
-        st.success("Identity Verified! Please complete the registration below.")
-
-        # 4. EMBED THE FORM (This hides the direct URL from the address bar)
-        # The ?embed=true makes the Microsoft Form fit the Streamlit window
+        # 4. FULL SCREEN EMBED
+        # We use a height of 1000 or higher to ensure the user doesn't see a double scrollbar
         form_url = "https://forms.office.com/r/KchEak7FWA?embed=true"
         
-        st.components.v1.iframe(form_url, height=800, scrolling=True)
+        # Small notification that disappears after a few seconds or stays subtle
+        st.toast("Identity Verified. Accessing Form...")
         
-        st.info("⚠️ IMPORTANT: Do not refresh or close this page until you have clicked 'Submit' on the form above.")
+        st.components.v1.iframe(form_url, height=1200, scrolling=True)
+        
+        st.caption("⚠️ Do not refresh this page. Your one-time access token has been consumed.")
     else:
-        # This handles tokens that are already 'Used' or don't exist
         st.error("Invalid or Expired Link.")
-        st.write("This secure link has already been used. If you need to register again, please request a new link.")
+        st.info("This secure link has already been used. Please request a new link if you need to resubmit.")
