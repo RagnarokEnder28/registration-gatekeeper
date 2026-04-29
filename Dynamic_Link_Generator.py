@@ -2,14 +2,14 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# 1. Page Configuration (Must be the very first Streamlit command)
+# 1. Page Configuration (Must be the first Streamlit command)
 st.set_page_config(
     page_title="Secure Access Portal", 
     page_icon="🔐", 
     layout="wide"
 )
 
-# 2. Professional UI Styling (Hides "Manage app", Menu, Footer, and Toolbar)
+# 2. Professional UI Styling
 st.markdown("""
     <style>
         /* Optimize container spacing */
@@ -25,7 +25,7 @@ st.markdown("""
         footer {visibility: hidden;}
         header {visibility: hidden;}
         
-        /* Specifically hide the "Manage app" button */
+        /* Specifically hide the "Manage app" / "Deploy" button */
         .stAppDeployButton {
             display: none;
         }
@@ -34,6 +34,11 @@ st.markdown("""
         [data-testid="stToolbar"] {
             visibility: hidden;
             display: none;
+        }
+
+        /* Ensure the iframe doesn't have a border */
+        iframe {
+            border: none;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -47,8 +52,7 @@ user_token = st.query_params.get("token")
 if not user_token:
     st.error("### Access Required\nNo security token detected. Please use the unique link provided in your official correspondence.")
 else:
-    # Read freshest data from Google Sheets
-    # ttl=0 ensures we don't use cached/old data
+    # Read freshest data from Google Sheets (ttl=0 avoids cache)
     df = conn.read(ttl=0)
     
     # Locate the specific row for this token
@@ -58,7 +62,7 @@ else:
         st.error("### Invalid Link\nThe link you are using is not recognized by our system. Please verify the URL or contact your coordinator.")
     
     else:
-        # Get the current status
+        # Get the current status from the sheet
         current_status = token_data['Status'].values[0]
 
         # SCENARIO 1: Token is Active (Proceed to Form)
@@ -70,8 +74,15 @@ else:
             st.toast("Identity Verified. Loading Registration Form...")
             
             # Embed MS Form
+            # height=2000 ensures the iframe is tall enough to not need internal scrolling
+            # scrolling=False removes the inner scrollbar, forcing use of browser scroll
             form_url = "https://forms.office.com/r/KchEak7FWA?embed=true"
-            st.components.v1.iframe(form_url, height=1200, scrolling=True)
+            
+            st.components.v1.iframe(
+                form_url, 
+                height=2000, 
+                scrolling=False
+            )
             
             st.caption("⚠️ **Notice:** This is a one-time access link. Your session will expire if this page is refreshed or closed.")
 
