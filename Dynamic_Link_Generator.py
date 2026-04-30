@@ -2,109 +2,83 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# 1. Page Configuration (Must be the first Streamlit command)
+# 1. Page Configuration
 st.set_page_config(
     page_title="Secure Access Portal", 
     page_icon="🔐", 
     layout="wide"
 )
 
-# 2. Professional UI Styling
+# 2. Professional UI Styling (CSS Hack)
 st.markdown("""
     <style>
-        /* Optimize container spacing */
-        .block-container {
-            padding-top: 1rem;
-            padding-bottom: 0rem;
-            padding-left: 2rem;
-            padding-right: 2rem;
-        }
-        
-        /* Hide Streamlit elements from outsiders */
+        .block-container { padding-top: 1rem; padding-bottom: 0rem; padding-left: 2rem; padding-right: 2rem; }
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         header {visibility: hidden;}
-        
-        /* Specifically hide the "Manage app" / "Deploy" button */
-        .stAppDeployButton {
-            display: none;
-        }
-        
-        /* Hide the bottom-right toolbar/hover icons */
-        [data-testid="stToolbar"] {
-            visibility: hidden;
-            display: none;
-        }
-
-        /* Ensure the iframe doesn't have a border */
-        iframe {
-            border: none;
-        }
+        .stAppDeployButton { display: none; }
+        [data-testid="stToolbar"] { visibility: hidden; display: none; }
+        iframe { border: none; }
     </style>
 """, unsafe_allow_html=True)
 
 # 3. Connection Setup
 conn = st.connection("gsheets", type=GSheetsConnection)
-
-# Get token from URL params
 user_token = st.query_params.get("token")
 
 if not user_token:
     st.error("### Access Required\nNo security token detected. Please use the unique link provided in your official correspondence.")
 else:
-    # Read freshest data from Google Sheets (ttl=0 avoids cache)
     df = conn.read(ttl=0)
-    
-    # Locate the specific row for this token
     token_data = df[df['Token'].astype(str) == str(user_token)]
 
     if token_data.empty:
-        st.error("### Invalid Link\nThe link you are using is not recognized by our system. Please verify the URL or contact your coordinator.")
-    
+        st.error("### Invalid Link\nThe link you are using is not recognized by our system.")
     else:
-        # Get the current status from the sheet
         current_status = token_data['Status'].values[0]
+        
+        # --- NEW LOGIC: Get the Form Type ---
+        # We look at the 'Type' column. Default to External if it's empty.
+        try:
+            form_type = token_data['Type'].values[0]
+        except:
+            form_type = "External"
 
-        # SCENARIO 1: Token is Active (Proceed to Form)
+        # Define your Form URLs
+        EXTERNAL_FORM = "https://forms.office.com/r/KchEak7FWA?embed=true"
+        INTERNAL_FORM = "https://forms.office.com/r/5s3GA7Df0T?embed=true"
+
+        # SCENARIO 1: Token is Active
         if current_status == "Active":
-            # Burn the token immediately by updating status to 'Used'
+            # Update status to 'Used'
             df.loc[df['Token'].astype(str) == str(user_token), 'Status'] = 'Used'
             conn.update(data=df)
             
-            st.toast("Identity Verified. Loading Registration Form...")
+            # Select the correct URL based on the 'Type' column
+            final_url = INTERNAL_FORM if form_type == "Internal" else EXTERNAL_FORM
             
-            # Embed MS Form
-            # height=2000 ensures the iframe is tall enough to not need internal scrolling
-            # scrolling=False removes the inner scrollbar, forcing use of browser scroll
-            form_url = "https://forms.office.com/r/KchEak7FWA?embed=true"
+            st.toast(f"Identity Verified ({form_type}). Loading Form...")
             
+            # Embed the selected Form
             st.components.v1.iframe(
-                form_url, 
+                final_url, 
                 height=2000, 
                 scrolling=False
             )
             
-            st.caption("⚠️ **Notice:** This is a one-time access link. Your session will expire if this page is refreshed or closed.")
+            st.caption(f"⚠️ **Notice:** This is a one-time {form_type} access link.")
 
         # SCENARIO 2: Token is Used or Terminated
         elif current_status in ["Used", "Terminated"]:
             st.warning("### Link Expired")
-            st.write("""
-                Our records indicate that this secure registration link has already been used or has reached its expiration date. 
-                
-                For security reasons, access tokens are restricted to a single use. If you encountered an error during your previous session and need to resubmit your information, please request a new link from your coordinator.
-            """)
+            st.write("This secure registration link has already been used or has reached its expiration date.")
 
         # SCENARIO 3: Token is On hold
         elif current_status == "On hold":
             st.info("### Access Pending")
-            st.write("""
-                This registration link is currently **On Hold** and has not yet been activated for use. 
-                
-                Please wait for further instructions from your coordinator. You will be notified once your specific access window is open.
-            """)
+            st.write("This registration link is currently **On Hold** and has not yet been activated.")
 
         # SCENARIO 4: Any other status
         else:
             st.error("### Access Restricted")
-            st.write("There is a status issue with this token. Please contact technical support for further assistance.")
+            st.write("There is a status issue with this token. Please contact technical support.")
