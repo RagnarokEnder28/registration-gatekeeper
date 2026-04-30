@@ -22,31 +22,49 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# ... (Keep your existing Page Config and CSS) ...
+
 # 3. Connection Setup
 conn = st.connection("gsheets", type=GSheetsConnection)
 user_token = st.query_params.get("token")
 
 if not user_token:
-    st.error("### Access Required\nNo security token detected. Please use the unique link provided in your official correspondence.")
+    st.error("### Access Required\nNo security token detected.")
 else:
     df = conn.read(ttl=0)
     token_data = df[df['Token'].astype(str) == str(user_token)]
 
     if token_data.empty:
-        st.error("### Invalid Link\nThe link you are using is not recognized by our system.")
+        st.error("### Invalid Link\nThe link is not recognized by our system.")
     else:
         current_status = token_data['Status'].values[0]
         
-        # --- NEW LOGIC: Get the Form Type ---
-        # We look at the 'Type' column. Default to External if it's empty.
+        # --- IMPROVED LOGIC: Case-Insensitive Type Check ---
+        # We look at Column F (Type). We use .upper() to avoid "Internal" vs "INTERNAL" errors.
         try:
-            form_type = token_data['Type'].values[0]
+            # We use index 5 because 'Type' is the 6th column (A=0, B=1, C=2, D=3, E=4, F=5)
+            form_type = str(token_data.iloc[0, 5]).upper() 
         except:
-            form_type = "External"
+            form_type = "EXTERNAL"
 
-        # Define your Form URLs
+        # Define URLs
         EXTERNAL_FORM = "https://forms.office.com/r/KchEak7FWA?embed=true"
         INTERNAL_FORM = "https://forms.office.com/r/5s3GA7Df0T?embed=true"
+
+        if current_status == "Active":
+            # Burn token
+            df.loc[df['Token'].astype(str) == str(user_token), 'Status'] = 'Used'
+            conn.update(data=df)
+            
+            # Use INTERNAL if type is "INTERNAL", otherwise use EXTERNAL
+            final_url = INTERNAL_FORM if form_type == "INTERNAL" else EXTERNAL_FORM
+            
+            st.toast(f"Identity Verified. Loading {form_type} Form...")
+            
+            st.components.v1.iframe(final_url, height=2000, scrolling=False)
+            st.caption(f"⚠️ **Notice:** This is a one-time {form_type} access link.")
+
+        # ... (Keep the rest of your elif/else status messages) ...
 
         # SCENARIO 1: Token is Active
         if current_status == "Active":
