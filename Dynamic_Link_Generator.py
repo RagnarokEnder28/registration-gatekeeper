@@ -1,5 +1,6 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
+import time
 import pandas as pd
 
 # 1. Page Configuration
@@ -21,6 +22,21 @@ st.markdown("""
         iframe { border: none; }
     </style>
 """, unsafe_allow_html=True)
+
+# 3. Connection Setup with Retry Logic
+def get_connection():
+    for i in range(3):  # Try 3 times
+        try:
+            return st.connection("gsheets", type=GSheetsConnection)
+        except Exception:
+            time.sleep(2) # Wait 2 seconds before retrying
+    return None
+
+conn = get_connection()
+
+if conn is None:
+    st.error("The secure gateway is taking longer than usual to respond. Please refresh this page.")
+    st.stop()
 
 # ... (Keep your existing Page Config and CSS) ...
 
