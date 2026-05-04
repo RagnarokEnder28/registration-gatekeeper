@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Professional UI Styling (CSS Hack)
+# 2. UI Styling
 st.markdown("""
     <style>
         .block-container { padding-top: 1rem; padding-bottom: 0rem; padding-left: 2rem; padding-right: 2rem; }
@@ -23,26 +23,19 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Connection Setup with Retry Logic
+# 3. Connection Setup
 def get_connection():
-    for i in range(3):  # Try 3 times
-        try:
-            return st.connection("gsheets", type=GSheetsConnection)
-        except Exception:
-            time.sleep(2) # Wait 2 seconds before retrying
-    return None
+    try:
+        return st.connection("gsheets", type=GSheetsConnection)
+    except Exception:
+        return None
 
 conn = get_connection()
+user_token = st.query_params.get("token")
 
 if conn is None:
-    st.error("The secure gateway is taking longer than usual to respond. Please refresh this page.")
+    st.error("The secure gateway is taking longer than usual to respond. Please refresh.")
     st.stop()
-
-# ... (Keep your existing Page Config and CSS) ...
-
-# 3. Connection Setup
-conn = st.connection("gsheets", type=GSheetsConnection)
-user_token = st.query_params.get("token")
 
 if not user_token:
     st.error("### Access Required\nNo security token detected.")
@@ -55,64 +48,37 @@ else:
     else:
         current_status = token_data['Status'].values[0]
         
-        # --- IMPROVED LOGIC: Case-Insensitive Type Check ---
-        # We look at Column F (Type). We use .upper() to avoid "Internal" vs "INTERNAL" errors.
+        # Determine Form Type (Column F / Index 5)
         try:
-            # We use index 5 because 'Type' is the 6th column (A=0, B=1, C=2, D=3, E=4, F=5)
-            form_type = str(token_data.iloc[0, 5]).upper() 
+            form_type_raw = str(token_data.iloc[0, 5]).upper()
         except:
-            form_type = "EXTERNAL"
+            form_type_raw = "EXTERNAL"
 
-        # Define URLs
         EXTERNAL_FORM = "https://forms.office.com/r/KchEak7FWA?embed=true"
         INTERNAL_FORM = "https://forms.office.com/r/5s3GA7Df0T?embed=true"
 
+        # --- SINGLE LOGIC GATEWAY ---
         if current_status == "Active":
-            # Burn token
+            # 1. Update status to 'Used' in the dataframe and sheet
             df.loc[df['Token'].astype(str) == str(user_token), 'Status'] = 'Used'
             conn.update(data=df)
             
-            # Use INTERNAL if type is "INTERNAL", otherwise use EXTERNAL
-            final_url = INTERNAL_FORM if form_type == "INTERNAL" else EXTERNAL_FORM
+            # 2. Select the URL
+            final_url = INTERNAL_FORM if form_type_raw == "INTERNAL" else EXTERNAL_FORM
             
-            st.toast(f"Identity Verified. Loading {form_type} Form...")
-            
+            # 3. Display UI elements ONCE
+            st.toast(f"Identity Verified. Loading {form_type_raw} Form...")
             st.components.v1.iframe(final_url, height=2000, scrolling=False)
-            st.caption(f"⚠️ **Notice:** This is a one-time {form_type} access link.")
+            st.caption(f"⚠️ **Notice:** This is a one-time {form_type_raw} access link.")
 
-        # ... (Keep the rest of your elif/else status messages) ...
-
-        # SCENARIO 1: Token is Active
-        if current_status == "Active":
-            # Update status to 'Used'
-            df.loc[df['Token'].astype(str) == str(user_token), 'Status'] = 'Used'
-            conn.update(data=df)
-            
-            # Select the correct URL based on the 'Type' column
-            final_url = INTERNAL_FORM if form_type == "Internal" else EXTERNAL_FORM
-            
-            st.toast(f"Identity Verified ({form_type}). Loading Form...")
-            
-            # Embed the selected Form
-            st.components.v1.iframe(
-                final_url, 
-                height=2000, 
-                scrolling=False
-            )
-            
-            st.caption(f"⚠️ **Notice:** This is a one-time {form_type} access link.")
-
-        # SCENARIO 2: Token is Used or Terminated
         elif current_status in ["Used", "Terminated"]:
             st.warning("### Link Expired")
-            st.write("This secure registration link has already been used or has reached its expiration date.")
+            st.write("This secure registration link has already been used or has expired.")
 
-        # SCENARIO 3: Token is On hold
         elif current_status == "On hold":
             st.info("### Access Pending")
-            st.write("This registration link is currently **On Hold** and has not yet been activated.")
+            st.write("This registration link is currently **On Hold**.")
 
-        # SCENARIO 4: Any other status
         else:
             st.error("### Access Restricted")
-            st.write("There is a status issue with this token. Please contact technical support.")
+            st.write("There is a status issue with this token. Please contact support.")
