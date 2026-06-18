@@ -54,8 +54,8 @@ else:
         except:
             form_type_raw = "EXTERNAL"
 
-        EXTERNAL_FORM = "https://forms.office.com/r/zCAJQxQ47x?embed=true"
-        INTERNAL_FORM = "https://forms.office.com/r/6Tj43R5Ljr?embed=true"
+        EXTERNAL_FORM = "https://forms.office.com/r/6Tj43R5Ljr?embed=true"
+        INTERNAL_FORM = "https://forms.office.com/r/zCAJQxQ47x?embed=true"
 
         # --- SINGLE LOGIC GATEWAY ---
         if current_status == "Active":
