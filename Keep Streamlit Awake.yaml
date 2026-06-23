@@ -1,10 +1,8 @@
-
+name: Keep Streamlit Awake
 
 on:
   schedule:
-    # This runs the script every 4 hours, 7 days a week
     - cron: "0 */4 * * *"
-  # This lets you run the script manually from GitHub anytime to test it
   workflow_dispatch:
 
 jobs:
@@ -12,5 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Send Ping Request
-        run: |
-          curl -sI https://dynamiclinkgeneratorpy-jvrqcasnbsduy6hwwmco58.streamlit.app/ | head -n 1
+        run: curl -sI https://dynamiclinkgeneratorpy-jvrqcasnbsduy6hwwmco58.streamlit.app/ | head -n 1
