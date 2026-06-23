@@ -10,4 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Send Ping Request
-        run: curl -sI https://dynamiclinkgeneratorpy-jvrqcasnbsduy6hwwmco58.streamlit.app/ | head -n 1
+        run: curl -sI https://dynamiclinkgeneratorpy-jvrqcasnbsduy6hwwmco58.streamlit.app/
