@@ -68,7 +68,19 @@ else:
             
             # 3. Display UI elements ONCE
             st.toast(f"Identity Verified. Loading {form_type_raw} Form...")
-            st.components.v1.iframe(final_url, height=2000, scrolling=False)
+            
+            # Handle Internal vs External routing due to Microsoft iframe restrictions
+            if form_type_raw == "INTERNAL":
+                st.success("### Identity Verified")
+                st.write(
+                    "This internal registration requires organization authentication. "
+                    "To sign in securely, please click the button below to open the form."
+                )
+                st.link_button("👉 Open Internal Microsoft Form", final_url, type="primary")
+            else:
+                # External forms usually allow embedding since they skip the organization login screen
+                st.components.v1.iframe(final_url, height=1200, scrolling=True)
+                
             st.caption(f"⚠️ **Notice:** This is a one-time {form_type_raw} access link.")
 
         elif current_status in ["Used", "Terminated"]:
