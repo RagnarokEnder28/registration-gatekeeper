@@ -1,168 +1,149 @@
 import streamlit as st
-
 from streamlit_gsheets import GSheetsConnection
-
-import time
-
 import pandas as pd
 
-
-
-# 1. Page Configuration
+# ======================================================
+# Page Configuration
+# ======================================================
 
 st.set_page_config(
-
-    page_title="Secure Access Portal", 
-
-    page_icon="🔐", 
-
+    page_title="Secure Access Portal",
+    page_icon="🔐",
     layout="wide"
-
 )
 
-
-
-# 2. UI Styling
+# ======================================================
+# UI Styling
+# ======================================================
 
 st.markdown("""
+<style>
+.block-container {
+    padding-top: 1rem;
+    padding-bottom: 0rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+}
 
-    <style>
+#MainMenu {visibility:hidden;}
+footer {visibility:hidden;}
+header {visibility:hidden;}
 
-        .block-container { padding-top: 1rem; padding-bottom: 0rem; padding-left: 2rem; padding-right: 2rem; }
+.stAppDeployButton {display:none;}
+[data-testid="stToolbar"] {display:none;}
 
-        #MainMenu {visibility: hidden;}
-
-        footer {visibility: hidden;}
-
-        header {visibility: hidden;}
-
-        .stAppDeployButton { display: none; }
-
-        [data-testid="stToolbar"] { visibility: hidden; display: none; }
-
-        iframe { border: none; }
-
-    </style>
-
+iframe {
+    border:none;
+}
+</style>
 """, unsafe_allow_html=True)
 
+# ======================================================
+# Google Sheets Connection
+# ======================================================
 
-
-# 3. Connection Setup
-
+@st.cache_resource
 def get_connection():
-
-    try:
-
-        return st.connection("gsheets", type=GSheetsConnection)
-
-    except Exception:
-
-        return None
-
-
+    return st.connection("gsheets", type=GSheetsConnection)
 
 conn = get_connection()
 
-user_token = st.query_params.get("token")
+# ======================================================
+# Read Token
+# ======================================================
 
+token = st.query_params.get("token")
 
-
-if conn is None:
-
-    st.error("The secure gateway is taking longer than usual to respond. Please refresh.")
-
+if not token:
+    st.error("### Access Required")
+    st.write("No security token detected.")
     st.stop()
 
+# ======================================================
+# Read Sheet
+# ======================================================
 
-
-if not user_token:
-
-    st.error("### Access Required\nNo security token detected.")
-
-else:
-
+try:
     df = conn.read(ttl=0)
+except Exception:
+    st.error("Unable to connect to the registration database.")
+    st.stop()
 
-    token_data = df[df['Token'].astype(str) == str(user_token)]
+record = df[df["Token"].astype(str) == str(token)]
 
+if record.empty:
+    st.error("### Invalid Link")
+    st.write("This link is not recognized.")
+    st.stop()
 
+# ======================================================
+# Get Values
+# ======================================================
 
-    if token_data.empty:
+status = str(record.iloc[0]["Status"]).strip()
 
-        st.error("### Invalid Link\nThe link is not recognized by our system.")
+try:
+    form_type = str(record.iloc[0,5]).strip().upper()
+except Exception:
+    form_type = "EXTERNAL"
+
+EXTERNAL_FORM = "https://forms.office.com/r/KchEak7FWA?embed=true"
+
+# IMPORTANT:
+# No ?embed=true for INTERNAL
+INTERNAL_FORM = "https://forms.office.com/r/5s3GA7Df0T"
+
+# ======================================================
+# Status Logic
+# ======================================================
+
+if status == "Active":
+
+    # Mark token as used
+    df.loc[df["Token"].astype(str)==str(token),"Status"] = "Used"
+    conn.update(data=df)
+
+    st.success("✅ Identity Verified")
+
+    if form_type == "INTERNAL":
+
+        st.info("""
+Your identity has been verified.
+
+Microsoft requires your organization's sign-in page to open outside of embedded pages.
+
+Click the button below to continue.
+""")
+
+        st.link_button(
+            "Continue to Internal Microsoft Form",
+            INTERNAL_FORM,
+            use_container_width=True
+        )
 
     else:
 
-        current_status = token_data['Status'].values[0]
+        st.toast("Loading External Registration Form...")
 
-        
+        st.components.v1.iframe(
+            EXTERNAL_FORM,
+            height=1800,
+            scrolling=False
+        )
 
-        # Determine Form Type (Column F / Index 5)
+        st.caption("⚠️ This is a one-time access link.")
 
-        try:
+elif status in ["Used", "Terminated"]:
 
-            form_type_raw = str(token_data.iloc[0, 5]).upper()
+    st.warning("### Link Expired")
+    st.write("This registration link has already been used or has expired.")
 
-        except:
+elif status == "On hold":
 
-            form_type_raw = "EXTERNAL"
+    st.info("### Access Pending")
+    st.write("This registration link is currently on hold.")
 
+else:
 
-
-        EXTERNAL_FORM = "https://forms.office.com/r/KchEak7FWA?embed=true"
-
-        INTERNAL_FORM = "https://forms.office.com/r/5s3GA7Df0T?embed=true"
-
-
-
-        # --- SINGLE LOGIC GATEWAY ---
-
-        if current_status == "Active":
-
-            # 1. Update status to 'Used' in the dataframe and sheet
-
-            df.loc[df['Token'].astype(str) == str(user_token), 'Status'] = 'Used'
-
-            conn.update(data=df)
-
-            
-
-            # 2. Select the URL
-
-            final_url = INTERNAL_FORM if form_type_raw == "INTERNAL" else EXTERNAL_FORM
-
-            
-
-            # 3. Display UI elements ONCE
-
-            st.toast(f"Identity Verified. Loading {form_type_raw} Form...")
-
-            st.components.v1.iframe(final_url, height=2000, scrolling=False)
-
-            st.caption(f"⚠️ **Notice:** This is a one-time {form_type_raw} access link.")
-
-
-
-        elif current_status in ["Used", "Terminated"]:
-
-            st.warning("### Link Expired")
-
-            st.write("This secure registration link has already been used or has expired.")
-
-
-
-        elif current_status == "On hold":
-
-            st.info("### Access Pending")
-
-            st.write("This registration link is currently **On Hold**.")
-
-
-
-        else:
-
-            st.error("### Access Restricted")
-
-            st.write("There is a status issue with this token. Please contact support.") 
-
+    st.error("### Access Restricted")
+    st.write("There is an issue with this registration token.")
