@@ -18,42 +18,17 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-
 .block-container {
     padding-top: 1rem;
     padding-bottom: 0rem;
     padding-left: 2rem;
     padding-right: 2rem;
 }
-
 #MainMenu {visibility:hidden;}
 footer {visibility:hidden;}
 header {visibility:hidden;}
 .stAppDeployButton {display:none;}
 [data-testid="stToolbar"] {display:none;}
-
-iframe{
-    border:none;
-}
-
-.green-btn{
-    display:block;
-    width:100%;
-    padding:14px;
-    text-align:center;
-    background:#28a745;
-    color:white !important;
-    border-radius:8px;
-    font-size:18px;
-    font-weight:bold;
-    text-decoration:none;
-    transition:0.2s;
-}
-
-.green-btn:hover{
-    background:#218838;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -74,7 +49,7 @@ if conn is None:
     st.stop()
 
 # ======================================================
-# Read Token
+# Read Token & Data
 # ======================================================
 
 user_token = st.query_params.get("token")
@@ -84,12 +59,7 @@ if not user_token:
     st.write("No security token detected.")
     st.stop()
 
-# ======================================================
-# Read Sheet
-# ======================================================
-
 df = conn.read(ttl=0)
-
 token_data = df[df["Token"].astype(str) == str(user_token)]
 
 if token_data.empty:
@@ -98,25 +68,15 @@ if token_data.empty:
     st.stop()
 
 # ======================================================
-# Read Values
+# Logic
 # ======================================================
 
 current_status = token_data["Status"].values[0]
+form_type = str(token_data.iloc[0, 5]).strip().upper()
 
-try:
-    form_type = str(token_data.iloc[0, 5]).strip().upper()
-except Exception:
-    form_type = "EXTERNAL"
-
-EXTERNAL_FORM = "https://forms.office.com/r/KchEak7FWA?embed=true"
-
-# IMPORTANT:
-# No ?embed=true
+# URLs updated to remove 'embed=true' which causes security blocks
 INTERNAL_FORM = "https://forms.office.com/r/5s3GA7Df0T"
-
-# ======================================================
-# Logic
-# ======================================================
+EXTERNAL_FORM = "https://forms.office.com/r/KchEak7FWA"
 
 if current_status == "Active":
 
@@ -125,49 +85,31 @@ if current_status == "Active":
     conn.update(data=df)
 
     st.success("✅ Identity Verified")
+    st.info("Your identity has been successfully verified.")
+    
+    target_url = INTERNAL_FORM if form_type == "INTERNAL" else EXTERNAL_FORM
 
-    if form_type == "INTERNAL":
-
-        st.info("""
-Your identity has been successfully verified.
-
-Click the button below to continue to the secure Microsoft registration form.
-""")
-
+    # Using st.link_button for reliable, non-embedded navigation
+    # This bypasses iframe security blocks (X-Frame-Options: DENY)
+    if hasattr(st, "link_button"):
+        st.link_button("👉 Continue to Microsoft Form", url=target_url, type="primary")
+    else:
+        # Fallback if Streamlit version is older
         st.markdown(
-            f"""
-            <a href="{INTERNAL_FORM}" target="_self" class="green-btn">
-                Continue to Microsoft Form
-            </a>
-            """,
+            f'<a href="{target_url}" target="_blank" style="display:inline-block; padding:0.5rem 1rem; background-color:#ff4b4b; color:white; border-radius:0.25rem; text-decoration:none; font-weight:bold;">👉 Continue to Microsoft Form</a>', 
             unsafe_allow_html=True
         )
 
-        st.caption("⚠️ This is a one-time access link.")
-
-    else:
-
-        st.toast("Loading External Registration Form...")
-
-        st.components.v1.iframe(
-            EXTERNAL_FORM,
-            height=2000,
-            scrolling=False
-        )
-
-        st.caption("⚠️ This is a one-time access link.")
+    st.caption("⚠️ This is a one-time access link.")
 
 elif current_status in ["Used", "Terminated"]:
-
     st.warning("### Link Expired")
     st.write("This secure registration link has already been used or has expired.")
 
 elif current_status == "On hold":
-
     st.info("### Access Pending")
     st.write("This registration link is currently On Hold.")
 
 else:
-
     st.error("### Access Restricted")
     st.write("There is a status issue with this token. Please contact support.")
