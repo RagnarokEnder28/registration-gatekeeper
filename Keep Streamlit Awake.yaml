@@ -2,7 +2,8 @@ name: Keep Streamlit Awake
 
 on:
   schedule:
-    - cron: "0 */4 * * *"
+    # Runs at minute 17 of every 4th hour (e.g., 4:17, 8:17) to avoid peak traffic delays
+    - cron: "17 */4 * * *"
   workflow_dispatch:
 
 jobs:
