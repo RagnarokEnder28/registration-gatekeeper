@@ -13,11 +13,12 @@ st.set_page_config(
 )
 
 # ======================================================
-# UI Styling
+# Custom CSS
 # ======================================================
 
 st.markdown("""
 <style>
+
 .block-container {
     padding-top: 1rem;
     padding-bottom: 0rem;
@@ -28,33 +29,57 @@ st.markdown("""
 #MainMenu {visibility:hidden;}
 footer {visibility:hidden;}
 header {visibility:hidden;}
-
 .stAppDeployButton {display:none;}
 [data-testid="stToolbar"] {display:none;}
 
-iframe {
+iframe{
     border:none;
 }
+
+.green-btn{
+    display:block;
+    width:100%;
+    padding:14px;
+    text-align:center;
+    background:#28a745;
+    color:white !important;
+    border-radius:8px;
+    font-size:18px;
+    font-weight:bold;
+    text-decoration:none;
+    transition:0.2s;
+}
+
+.green-btn:hover{
+    background:#218838;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
 # ======================================================
-# Google Sheets Connection
+# Connection
 # ======================================================
 
-@st.cache_resource
 def get_connection():
-    return st.connection("gsheets", type=GSheetsConnection)
+    try:
+        return st.connection("gsheets", type=GSheetsConnection)
+    except Exception:
+        return None
 
 conn = get_connection()
+
+if conn is None:
+    st.error("The secure gateway is taking longer than usual to respond. Please refresh.")
+    st.stop()
 
 # ======================================================
 # Read Token
 # ======================================================
 
-token = st.query_params.get("token")
+user_token = st.query_params.get("token")
 
-if not token:
+if not user_token:
     st.error("### Access Required")
     st.write("No security token detected.")
     st.stop()
@@ -63,44 +88,40 @@ if not token:
 # Read Sheet
 # ======================================================
 
-try:
-    df = conn.read(ttl=0)
-except Exception:
-    st.error("Unable to connect to the registration database.")
-    st.stop()
+df = conn.read(ttl=0)
 
-record = df[df["Token"].astype(str) == str(token)]
+token_data = df[df["Token"].astype(str) == str(user_token)]
 
-if record.empty:
+if token_data.empty:
     st.error("### Invalid Link")
-    st.write("This link is not recognized.")
+    st.write("The link is not recognized by our system.")
     st.stop()
 
 # ======================================================
-# Get Values
+# Read Values
 # ======================================================
 
-status = str(record.iloc[0]["Status"]).strip()
+current_status = token_data["Status"].values[0]
 
 try:
-    form_type = str(record.iloc[0,5]).strip().upper()
+    form_type = str(token_data.iloc[0, 5]).strip().upper()
 except Exception:
     form_type = "EXTERNAL"
 
 EXTERNAL_FORM = "https://forms.office.com/r/KchEak7FWA?embed=true"
 
 # IMPORTANT:
-# No ?embed=true for INTERNAL
+# No ?embed=true
 INTERNAL_FORM = "https://forms.office.com/r/5s3GA7Df0T"
 
 # ======================================================
-# Status Logic
+# Logic
 # ======================================================
 
-if status == "Active":
+if current_status == "Active":
 
-    # Mark token as used
-    df.loc[df["Token"].astype(str)==str(token),"Status"] = "Used"
+    # Mark as Used
+    df.loc[df["Token"].astype(str) == str(user_token), "Status"] = "Used"
     conn.update(data=df)
 
     st.success("✅ Identity Verified")
@@ -108,18 +129,21 @@ if status == "Active":
     if form_type == "INTERNAL":
 
         st.info("""
-Your identity has been verified.
+Your identity has been successfully verified.
 
-Microsoft requires your organization's sign-in page to open outside of embedded pages.
-
-Click the button below to continue.
+Click the button below to continue to the secure Microsoft registration form.
 """)
 
-        st.link_button(
-            "Continue to Internal Microsoft Form",
-            INTERNAL_FORM,
-            use_container_width=True
+        st.markdown(
+            f"""
+            <a href="{INTERNAL_FORM}" target="_self" class="green-btn">
+                Continue to Microsoft Form
+            </a>
+            """,
+            unsafe_allow_html=True
         )
+
+        st.caption("⚠️ This is a one-time access link.")
 
     else:
 
@@ -127,23 +151,23 @@ Click the button below to continue.
 
         st.components.v1.iframe(
             EXTERNAL_FORM,
-            height=1800,
+            height=2000,
             scrolling=False
         )
 
         st.caption("⚠️ This is a one-time access link.")
 
-elif status in ["Used", "Terminated"]:
+elif current_status in ["Used", "Terminated"]:
 
     st.warning("### Link Expired")
-    st.write("This registration link has already been used or has expired.")
+    st.write("This secure registration link has already been used or has expired.")
 
-elif status == "On hold":
+elif current_status == "On hold":
 
     st.info("### Access Pending")
-    st.write("This registration link is currently on hold.")
+    st.write("This registration link is currently On Hold.")
 
 else:
 
     st.error("### Access Restricted")
-    st.write("There is an issue with this registration token.")
+    st.write("There is a status issue with this token. Please contact support.")
